@@ -35,7 +35,23 @@ public:
     // syncMode selects the hardware trigger-cable role for multi-device
     // capture; ofxOrbbecManager::openAll() sets this consistently across
     // its owned devices.
-    bool open(const std::string& serial, SyncMode syncMode = SyncMode::Standalone);
+    // Stream options. Zero width/height/fps = let the SDK pick (the old default).
+    // alignDepthToColor registers depth into the color camera (SDK Align filter), so
+    // depth and color are the same size and a color pixel (u,v) indexes depth directly;
+    // depth intrinsics then equal the color intrinsics.
+    struct Options {
+        int  colorWidth = 0;
+        int  colorHeight = 0;
+        int  colorFps = 0;
+        bool alignDepthToColor = false;
+        // A Femto Mega on the network (Ethernet): its IPv4 address, e.g. "192.168.1.10"; the SDK only
+        // supports port 8090. When set, open() connects to it directly and `serial` is not used to find it
+        // (it is filled in from the device).
+        std::string netAddress;
+        int netPort = 8090;
+    };
+
+    bool open(const std::string& serial, SyncMode syncMode = SyncMode::Standalone, const Options& options = Options());
     void close();
     bool isOpen() const { return isOpen_; }
 
@@ -46,6 +62,16 @@ public:
     const ofxOrbbecFrame& getFrame() const { return front_; }
     const ofxOrbbecIntrinsics& getDepthIntrinsics() const { return depthIntrinsics_; }
     const ofxOrbbecIntrinsics& getColorIntrinsics() const { return colorIntrinsics_; }
+
+    // The accelerometer: which way is up, as a unit vector in the colour camera's frame (x right, y down, z
+    // forward), low-passed. It is the base pose of the camera (its pitch and roll) without any calibration.
+    // False when the device has no accelerometer, or it has not reported yet.
+    bool getUp(glm::vec3& up) const {
+        if (!imuOk_) return false;
+        up = glm::vec3(upX_.load(), upY_.load(), upZ_.load());
+        return true;
+    }
+    bool hasImu() const { return imuOk_; }
 
     const std::string& getSerial() const { return serial_; }
     SyncMode getSyncMode() const { return syncMode_; }
@@ -65,11 +91,21 @@ private:
     ofxOrbbecFrame front_;
     std::atomic<bool> frameReady_{false};
 
+    // accelerometer
+    std::atomic<bool> imuOk_{false};
+    std::atomic<float> upX_{0.f}, upY_{-1.f}, upZ_{0.f};
+    float imuRot_[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};   // accelerometer axes -> colour camera axes
+    glm::vec3 imuUp_{0.f, 1.f, 0.f};                    // low-pass state, accelerometer frame
+    bool imuPrimed_ = false;
+
     ofxOrbbecIntrinsics depthIntrinsics_;
     ofxOrbbecIntrinsics colorIntrinsics_;
 
 #ifdef OFX_ORBBEC_HAVE_SDK
     std::shared_ptr<ob::Pipeline> pipeline_;
     std::shared_ptr<ob::Device>   device_;
+    std::shared_ptr<ob::Align>    align_;
+    std::shared_ptr<ob::Sensor>   accelSensor_;
 #endif
+    Options options_;
 };
