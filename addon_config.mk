@@ -42,5 +42,6 @@ osx:
 	ADDON_DEFINES = OFX_ORBBEC_HAVE_SDK
 	ADDON_LIBS = libs/OrbbecSDK/lib/macos/libOrbbecSDK.dylib
 	ADDON_LDFLAGS = -Wl,-rpath,@executable_path/
-	# after the build: put the SDK dylibs and extensions/ next to the executable inside the .app
-	ADDON_AFTER = cp -a $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/lib/macos/*.dylib $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/extensions $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/OrbbecSDKConfig.xml bin/$(BIN_NAME).app/Contents/MacOS/ ;
+	# after the build: put the SDK dylibs and extensions/ next to the executable inside the .app. --ignore-existing: an app that put them
+	# there itself, to sign the bundle after, keeps its signed copies
+	ADDON_AFTER = rsync -a --ignore-existing $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/lib/macos/*.dylib $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/extensions bin/$(BIN_NAME).app/Contents/MacOS/ ;

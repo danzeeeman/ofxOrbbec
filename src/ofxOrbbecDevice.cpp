@@ -95,10 +95,38 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
                                        << " fps, colour " << colorMode.width << "x" << colorMode.height << " @ " << colorMode.fps << " fps";
         config->enableVideoStream(OB_STREAM_DEPTH, depthMode.width, depthMode.height, depthMode.fps, OB_FORMAT_Y16);
         config->enableVideoStream(OB_STREAM_COLOR, colorMode.width, colorMode.height, colorMode.fps, OB_FORMAT_RGB);
+        align_.reset();
         if (options_.alignDepthToColor) {
-            align_ = std::make_shared<ob::Align>(OB_STREAM_COLOR);
-        } else {
-            align_.reset();
+            // Depth registered into the colour camera with the calibration the device carries. On the device
+            // (hardware D2C) when it can do it for these two modes: free, and no frames lost to it. Otherwise the
+            // SDK's Align filter, on the capture thread, with the same calibration read from the device.
+            bool hw = false;
+            try {
+                auto cp = pipeline_->getStreamProfileList(OB_SENSOR_COLOR)->getVideoStreamProfile(colorMode.width, colorMode.height, OB_FORMAT_ANY, colorMode.fps);
+                auto dl = cp ? pipeline_->getD2CDepthProfileList(cp, ALIGN_D2C_HW_MODE) : nullptr;
+                for (uint32_t i = 0; dl && i < dl->getCount() && !hw; ++i) {
+                    auto p = dl->getProfile(i);
+                    if (!p || !p->is<ob::VideoStreamProfile>()) continue;
+                    auto v = p->as<ob::VideoStreamProfile>();
+                    hw = v->getWidth() == depthMode.width && v->getHeight() == depthMode.height && v->getFps() == depthMode.fps;
+                }
+            } catch (const ob::Error& e) {
+                ofLogNotice("ofxOrbbecDevice") << serial_ << ": no hardware D2C (" << e.getMessage() << ")";
+            }
+            if (hw) {
+                config->setAlignMode(ALIGN_D2C_HW_MODE);
+            } else {
+                align_ = std::make_shared<ob::Align>(OB_STREAM_COLOR);
+            }
+            ofLogNotice("ofxOrbbecDevice") << serial_ << ": depth registered to colour " << (hw ? "on the device (hardware D2C)" : "in software (SDK Align filter)");
+        }
+        // Depth and colour paired by time, and only framesets that have both: registering one moment's depth
+        // into another moment's colour puts a moving person's depth beside them.
+        config->setFrameAggregateOutputMode(OB_FRAME_AGGREGATE_OUTPUT_ALL_TYPE_FRAME_REQUIRE);
+        try {
+            pipeline_->enableFrameSync();
+        } catch (const ob::Error& e) {
+            ofLogWarning("ofxOrbbecDevice") << serial_ << ": no frame sync (" << e.getMessage() << "); depth and colour may be a frame apart";
         }
         pipeline_->start(config);
 
@@ -171,8 +199,8 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
             return out;
         };
         colorIntrinsics_ = readIntrinsics(frameSet->getFrame(OB_FRAME_COLOR));
-        if (align_) {
-            // depth is registered into the color camera: same pixel grid, same intrinsics
+        if (options_.alignDepthToColor) {
+            // depth is registered into the color camera (on the device or by align_): same pixel grid, same intrinsics
             depthIntrinsics_ = colorIntrinsics_;
         } else {
             depthIntrinsics_ = readIntrinsics(frameSet->getFrame(OB_FRAME_DEPTH));
