@@ -51,7 +51,9 @@ public:
         int netPort = 8090;
     };
 
-    bool open(const std::string& serial, SyncMode syncMode = SyncMode::Standalone, const Options& options = Options());
+    // No `= Options()` default argument: clang rejects it while Options' member initializers are still pending.
+    bool open(const std::string& serial, SyncMode syncMode = SyncMode::Standalone) { return open(serial, syncMode, Options()); }
+    bool open(const std::string& serial, SyncMode syncMode, const Options& options);
     void close();
     bool isOpen() const { return isOpen_; }
 
