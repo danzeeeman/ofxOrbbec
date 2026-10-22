@@ -32,3 +32,15 @@ vs:
 	# robotController.vcxproj precedent (Windows doesn't consume
 	# addon_config.mk).
 	ADDON_LIBS = C:/src/OrbbecSDK/lib/OrbbecSDK.lib
+
+osx:
+	# OrbbecSDK_v2 macOS release (universal x86_64 + arm64), vendored (git-ignored) at
+	# libs/OrbbecSDK/{include,lib/macos,extensions}. extensions/ is kept out of lib/ on purpose: OF links
+	# every dylib it finds under libs/*/lib/macos, and these are plugins the SDK dlopen()s. At runtime the
+	# dylibs from lib/macos and the extensions/ folder have to sit next to the executable
+	# (@executable_path/), i.e. in <app>.app/Contents/MacOS/.
+	ADDON_DEFINES = OFX_ORBBEC_HAVE_SDK
+	ADDON_LIBS = libs/OrbbecSDK/lib/macos/libOrbbecSDK.dylib
+	ADDON_LDFLAGS = -Wl,-rpath,@executable_path/
+	# after the build: put the SDK dylibs and extensions/ next to the executable inside the .app
+	ADDON_AFTER = cp -a $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/lib/macos/*.dylib $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/extensions $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/OrbbecSDKConfig.xml bin/*.app/Contents/MacOS/ ;
