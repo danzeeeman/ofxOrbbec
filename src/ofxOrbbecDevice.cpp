@@ -1,5 +1,29 @@
 #include "ofxOrbbecDevice.h"
 
+#ifdef OFX_ORBBEC_HAVE_SDK
+namespace {
+struct VideoMode {
+    uint32_t width = 0, height = 0, fps = 0;
+};
+
+// The fastest of a sensor's modes that match the non-zero width/height/fps: highest fps, then fewest
+// pixels. Formats are ignored here; the caller asks for the one it wants and the SDK converts.
+VideoMode pickFastest(const std::shared_ptr<ob::StreamProfileList>& list, int width, int height, int fps) {
+    VideoMode best;
+    if (!list) return best;
+    for (uint32_t i = 0; i < list->getCount(); ++i) {
+        auto p = list->getProfile(i);
+        if (!p || !p->is<ob::VideoStreamProfile>()) continue;
+        auto v = p->as<ob::VideoStreamProfile>();
+        const uint32_t w = v->getWidth(), h = v->getHeight(), f = v->getFps();
+        if ((width > 0 && (int)w != width) || (height > 0 && (int)h != height) || (fps > 0 && (int)f != fps)) continue;
+        if (f > best.fps || (f == best.fps && (uint64_t)w * h < (uint64_t)best.width * best.height)) best = {w, h, f};
+    }
+    return best;
+}
+}
+#endif
+
 bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const Options& options) {
     if (isOpen_) {
         ofLogWarning("ofxOrbbecDevice") << "already open (" << serial_ << ")";
@@ -56,12 +80,21 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
 
         pipeline_ = std::make_shared<ob::Pipeline>(device_);
         auto config = std::make_shared<ob::Config>();
-        config->enableVideoStream(OB_STREAM_DEPTH, OB_WIDTH_ANY, OB_HEIGHT_ANY, OB_FPS_ANY, OB_FORMAT_Y16);
-        config->enableVideoStream(OB_STREAM_COLOR,
-                                  options_.colorWidth  > 0 ? options_.colorWidth  : OB_WIDTH_ANY,
-                                  options_.colorHeight > 0 ? options_.colorHeight : OB_HEIGHT_ANY,
-                                  options_.colorFps    > 0 ? options_.colorFps    : OB_FPS_ANY,
-                                  OB_FORMAT_RGB);
+        // Pick explicit modes rather than OB_*_ANY: left to itself the SDK can choose a slower one
+        // (e.g. the 15 fps wide depth mode), which then holds back the whole synced frameset.
+        const VideoMode depthMode = pickFastest(pipeline_->getStreamProfileList(OB_SENSOR_DEPTH),
+                                                options_.depthWidth, options_.depthHeight, options_.depthFps);
+        const VideoMode colorMode = pickFastest(pipeline_->getStreamProfileList(OB_SENSOR_COLOR),
+                                                options_.colorWidth, options_.colorHeight, options_.colorFps);
+        if (depthMode.fps == 0 || colorMode.fps == 0) {
+            ofLogError("ofxOrbbecDevice") << serial_ << ": no " << (depthMode.fps == 0 ? "depth" : "colour")
+                                          << " mode matches the requested width/height/fps";
+            return false;
+        }
+        ofLogNotice("ofxOrbbecDevice") << serial_ << ": depth " << depthMode.width << "x" << depthMode.height << " @ " << depthMode.fps
+                                       << " fps, colour " << colorMode.width << "x" << colorMode.height << " @ " << colorMode.fps << " fps";
+        config->enableVideoStream(OB_STREAM_DEPTH, depthMode.width, depthMode.height, depthMode.fps, OB_FORMAT_Y16);
+        config->enableVideoStream(OB_STREAM_COLOR, colorMode.width, colorMode.height, colorMode.fps, OB_FORMAT_RGB);
         if (options_.alignDepthToColor) {
             align_ = std::make_shared<ob::Align>(OB_STREAM_COLOR);
         } else {
@@ -72,7 +105,17 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
         // One synchronous frameset to read back the active stream profiles'
         // calibration (intrinsics/distortion aren't queryable before streaming
         // starts in the examples this was verified against).
-        auto frameSet = pipeline_->waitForFrameset(3000);
+        // The first framesets can arrive without a colour frame (a networked camera starts depth first), and
+        // the intrinsics below come from it, so wait for one that has both.
+        std::shared_ptr<ob::FrameSet> frameSet;
+        const uint64_t waitUntil = ofGetElapsedTimeMillis() + 3000;
+        while (ofGetElapsedTimeMillis() < waitUntil) {
+            auto fs = pipeline_->waitForFrameset(500);
+            if (fs && fs->getFrame(OB_FRAME_COLOR) && fs->getFrame(OB_FRAME_DEPTH)) {
+                frameSet = fs;
+                break;
+            }
+        }
         if (!frameSet) {
             ofLogError("ofxOrbbecDevice") << "timed out waiting for first frameset: " << serial;
             pipeline_->stop();

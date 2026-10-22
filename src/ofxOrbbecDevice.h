@@ -35,7 +35,8 @@ public:
     // syncMode selects the hardware trigger-cable role for multi-device
     // capture; ofxOrbbecManager::openAll() sets this consistently across
     // its owned devices.
-    // Stream options. Zero width/height/fps = let the SDK pick (the old default).
+    // Stream options. Zero width/height/fps = the fastest mode the device offers: the highest frame
+    // rate, then the smallest image at that rate (any non-zero values narrow the choice first).
     // alignDepthToColor registers depth into the color camera (SDK Align filter), so
     // depth and color are the same size and a color pixel (u,v) indexes depth directly;
     // depth intrinsics then equal the color intrinsics.
@@ -43,6 +44,9 @@ public:
         int  colorWidth = 0;
         int  colorHeight = 0;
         int  colorFps = 0;
+        int  depthWidth = 0;
+        int  depthHeight = 0;
+        int  depthFps = 0;
         bool alignDepthToColor = false;
         // A Femto Mega on the network (Ethernet): its IPv4 address, e.g. "192.168.1.10"; the SDK only
         // supports port 8090. When set, open() connects to it directly and `serial` is not used to find it

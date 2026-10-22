@@ -43,4 +43,4 @@ osx:
 	ADDON_LIBS = libs/OrbbecSDK/lib/macos/libOrbbecSDK.dylib
 	ADDON_LDFLAGS = -Wl,-rpath,@executable_path/
 	# after the build: put the SDK dylibs and extensions/ next to the executable inside the .app
-	ADDON_AFTER = cp -a $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/lib/macos/*.dylib $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/extensions $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/OrbbecSDKConfig.xml bin/*.app/Contents/MacOS/ ;
+	ADDON_AFTER = cp -a $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/lib/macos/*.dylib $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/extensions $(OF_ROOT)/addons/ofxOrbbec/libs/OrbbecSDK/OrbbecSDKConfig.xml bin/$(BIN_NAME).app/Contents/MacOS/ ;
