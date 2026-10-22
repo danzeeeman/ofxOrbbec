@@ -19,10 +19,10 @@ common:
 	# C:/src/OrbbecSDK/bin/OrbbecSDK.dll + the bin/extensions/ subfolder
 	# (depthengine/filters/firmwareupdater/frameprocessor) copied alongside
 	# the built .exe.
-	ADDON_INCLUDES = C:/src/OrbbecSDK/include
-	ADDON_CFLAGS = /std:c++17
 
 vs:
+	ADDON_INCLUDES = C:/src/OrbbecSDK/include
+	ADDON_CFLAGS = /std:c++17
 	# Single-config .lib (no separate Debug build shipped in this release) -
 	# safe to link from both Debug and Release configs, unlike cuMotion/
 	# nvblox's Release-only /MD constraint. This addon_config is
