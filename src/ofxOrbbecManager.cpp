@@ -12,7 +12,7 @@ std::vector<std::string> ofxOrbbecManager::listDevices() {
         }
         return serials;
     } catch (const ob::Error& e) {
-        ofLogError("ofxOrbbecManager") << "listDevices() failed: " << e.getMessage();
+        ofLogWarning("ofxOrbbecManager") << "listDevices() failed: " << e.getMessage();
         return {};
     }
 #else

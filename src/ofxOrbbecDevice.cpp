@@ -40,7 +40,7 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
         if (!options_.netAddress.empty()) {
             device_ = context.createNetDevice(options_.netAddress.c_str(), (uint16_t)options_.netPort);
             if (!device_) {
-                ofLogError("ofxOrbbecDevice") << "no device at " << options_.netAddress << ":" << options_.netPort;
+                ofLogWarning("ofxOrbbecDevice") << "no device at " << options_.netAddress << ":" << options_.netPort;
                 return false;
             }
             serial_ = device_->getDeviceInfo()->getSerialNumber();
@@ -48,7 +48,7 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
             auto deviceList = context.queryDeviceList();
             device_ = deviceList->getDeviceBySN(serial.c_str());
             if (!device_) {
-                ofLogError("ofxOrbbecDevice") << "device not found: " << serial;
+                ofLogWarning("ofxOrbbecDevice") << "device not found: " << serial;
                 return false;
             }
         }
@@ -87,7 +87,7 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
         const VideoMode colorMode = pickFastest(pipeline_->getStreamProfileList(OB_SENSOR_COLOR),
                                                 options_.colorWidth, options_.colorHeight, options_.colorFps);
         if (depthMode.fps == 0 || colorMode.fps == 0) {
-            ofLogError("ofxOrbbecDevice") << serial_ << ": no " << (depthMode.fps == 0 ? "depth" : "colour")
+            ofLogWarning("ofxOrbbecDevice") << serial_ << ": no " << (depthMode.fps == 0 ? "depth" : "colour")
                                           << " mode matches the requested width/height/fps";
             return false;
         }
@@ -145,7 +145,7 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
             }
         }
         if (!frameSet) {
-            ofLogError("ofxOrbbecDevice") << "timed out waiting for first frameset: " << serial;
+            ofLogWarning("ofxOrbbecDevice") << "timed out waiting for first frameset: " << serial;
             pipeline_->stop();
             return false;
         }
@@ -206,7 +206,7 @@ bool ofxOrbbecDevice::open(const std::string& serial, SyncMode syncMode, const O
             depthIntrinsics_ = readIntrinsics(frameSet->getFrame(OB_FRAME_DEPTH));
         }
     } catch (const ob::Error& e) {
-        ofLogError("ofxOrbbecDevice") << "open(\"" << serial << "\") failed: " << e.getMessage();
+        ofLogWarning("ofxOrbbecDevice") << "open(\"" << serial << "\") failed: " << e.getMessage();
         return false;
     }
 
@@ -263,7 +263,7 @@ void ofxOrbbecDevice::captureLoop() {
         try {
             frameSet = pipeline_->waitForFrameset(100);
         } catch (const ob::Error& e) {
-            ofLogError("ofxOrbbecDevice") << "waitForFrameset failed: " << e.getMessage();
+            ofLogWarning("ofxOrbbecDevice") << "waitForFrameset failed: " << e.getMessage();
             continue;
         }
         if (!frameSet) continue; // timeout, try again
@@ -274,7 +274,7 @@ void ofxOrbbecDevice::captureLoop() {
                 frameSet = aligned->as<ob::FrameSet>();
                 if (!frameSet) continue;
             } catch (const ob::Error& e) {
-                ofLogError("ofxOrbbecDevice") << "align failed: " << e.getMessage();
+                ofLogWarning("ofxOrbbecDevice") << "align failed: " << e.getMessage();
                 continue;
             }
         }
